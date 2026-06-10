@@ -64,9 +64,108 @@
       inset: 0;
       z-index: 9999;
       overflow: auto;
+      grid-template-rows: auto 1fr;
+      gap: 16px;
+      padding: clamp(14px, 1.4vw, 26px);
       background:
         radial-gradient(circle at 18% 18%, rgba(255, 221, 87, 0.35), transparent 28%),
         linear-gradient(135deg, #e7f2ff 0%, #f9fbff 45%, #fff3ea 100%);
+    }
+
+    body.app-fullscreen .topbar,
+    body.app-fullscreen .footer {
+      max-width: min(1880px, 100%);
+    }
+
+    body.app-fullscreen .title {
+      font-size: clamp(38px, 4.6vw, 72px);
+    }
+
+    body.app-fullscreen .icon-button {
+      width: clamp(54px, 4vw, 76px);
+      height: clamp(54px, 4vw, 76px);
+      font-size: clamp(22px, 1.8vw, 32px);
+    }
+
+    body.app-fullscreen .game-shell {
+      max-width: min(1880px, 100%);
+      align-items: stretch;
+    }
+
+    body.app-fullscreen .game-board {
+      grid-template-columns: minmax(340px, 430px) minmax(680px, 1fr) minmax(340px, 430px);
+      gap: clamp(20px, 1.8vw, 34px);
+      min-height: min(820px, calc(100vh - 150px));
+    }
+
+    body.app-fullscreen .calculator-panel,
+    body.app-fullscreen .arena-wrap {
+      min-height: min(820px, calc(100vh - 150px));
+    }
+
+    body.app-fullscreen .calculator-panel {
+      padding: clamp(18px, 1.5vw, 28px);
+      gap: clamp(16px, 1.2vw, 24px);
+    }
+
+    body.app-fullscreen .panel-header h2 {
+      font-size: clamp(28px, 2vw, 42px);
+    }
+
+    body.app-fullscreen .score-badge {
+      min-width: clamp(64px, 4.8vw, 92px);
+      height: clamp(56px, 4.2vw, 82px);
+      font-size: clamp(30px, 2.4vw, 48px);
+    }
+
+    body.app-fullscreen .problem {
+      min-height: clamp(108px, 9vh, 160px);
+      font-size: clamp(34px, 3.1vw, 58px);
+    }
+
+    body.app-fullscreen .answer {
+      height: clamp(78px, 7vh, 112px);
+      font-size: clamp(36px, 3vw, 56px);
+    }
+
+    body.app-fullscreen .keypad {
+      gap: clamp(12px, 1vw, 20px);
+    }
+
+    body.app-fullscreen .key {
+      min-height: clamp(70px, 7.1vh, 104px);
+      font-size: clamp(30px, 2.4vw, 46px);
+    }
+
+    body.app-fullscreen .scoreboard {
+      padding: clamp(16px, 1.3vw, 24px);
+      font-size: clamp(18px, 1.4vw, 26px);
+    }
+
+    body.app-fullscreen .score-value {
+      min-width: clamp(44px, 3.4vw, 66px);
+      height: clamp(44px, 3.4vw, 66px);
+    }
+
+    body.app-fullscreen .timer {
+      min-width: clamp(112px, 8.5vw, 170px);
+      font-size: clamp(20px, 1.6vw, 32px);
+    }
+
+    body.app-fullscreen .arena {
+      min-height: min(720px, calc(100vh - 240px));
+    }
+
+    body.app-fullscreen .tug-scene {
+      width: min(100%, 1120px);
+      height: min(100%, 610px);
+    }
+
+    body.app-fullscreen .distance {
+      bottom: clamp(20px, 2vw, 34px);
+      min-width: clamp(190px, 15vw, 280px);
+      padding: 14px 18px;
+      font-size: clamp(18px, 1.4vw, 26px);
     }
 
     .topbar {
@@ -868,6 +967,16 @@
     }
 
     @media (max-width: 980px) {
+      body.app-fullscreen .game-board {
+        grid-template-columns: 1fr;
+        min-height: auto;
+      }
+
+      body.app-fullscreen .calculator-panel,
+      body.app-fullscreen .arena-wrap {
+        min-height: auto;
+      }
+
       .game-board {
         grid-template-columns: 1fr;
       }
@@ -1318,6 +1427,7 @@
       scores: { left: 0, right: 0 },
       locks: { left: false, right: false },
       names: { left: "藍隊", right: "紅隊" },
+      keyboardSide: "left",
       startTime: 0,
       elapsed: 0,
       timerId: null,
@@ -1359,6 +1469,7 @@
       buildKeypad("right");
       bindSetup();
       bindTopButtons();
+      bindKeyboardControls();
       updateSetupView();
       updateScores();
       updateRope();
@@ -1378,14 +1489,13 @@
         const button = event.target.closest("button");
         if (!button || !state.active || state.locks[side]) return;
         event.preventDefault();
-        if (button.dataset.action === "clear") clearInput(side);
-        else if (button.dataset.action === "submit") checkAnswer(side);
-        else pressKey(side, button.dataset.value);
+        handleTeamInput(side, button.dataset.action || button.dataset.value);
       };
 
       pad.addEventListener("pointerdown", (event) => {
         const button = event.target.closest("button");
         if (button) button.dataset.lastPointer = String(Date.now());
+        state.keyboardSide = side;
         handleKeyPress(event);
       });
 
@@ -1443,6 +1553,13 @@
     }
 
     function bindTopButtons() {
+      $(".panel-left").addEventListener("pointerdown", () => {
+        state.keyboardSide = "left";
+      });
+      $(".panel-right").addEventListener("pointerdown", () => {
+        state.keyboardSide = "right";
+      });
+
       $("#resetTop").addEventListener("click", resetToSetup);
       els.musicToggle.addEventListener("click", () => {
         state.musicEnabled = !state.musicEnabled;
@@ -1452,6 +1569,9 @@
         if (!state.musicEnabled) stopMusic();
       });
       $("#fullscreen").addEventListener("click", toggleFullscreen);
+      document.addEventListener("fullscreenchange", syncFullscreenClass);
+      document.addEventListener("webkitfullscreenchange", syncFullscreenClass);
+      document.addEventListener("msfullscreenchange", syncFullscreenClass);
     }
 
     async function toggleFullscreen() {
@@ -1472,7 +1592,7 @@
       try {
         if (!fullscreenElement && requestFullscreen) {
           await requestFullscreen.call(root);
-          document.body.classList.remove("app-fullscreen");
+          document.body.classList.add("app-fullscreen");
           state.pseudoFullscreen = false;
           return;
         }
@@ -1488,6 +1608,59 @@
 
       state.pseudoFullscreen = !state.pseudoFullscreen;
       document.body.classList.toggle("app-fullscreen", state.pseudoFullscreen);
+    }
+
+    function syncFullscreenClass() {
+      const fullscreenElement =
+        document.fullscreenElement ||
+        document.webkitFullscreenElement ||
+        document.msFullscreenElement;
+
+      if (fullscreenElement) {
+        document.body.classList.add("app-fullscreen");
+        state.pseudoFullscreen = false;
+      } else if (!state.pseudoFullscreen) {
+        document.body.classList.remove("app-fullscreen");
+      }
+    }
+
+    function bindKeyboardControls() {
+      document.addEventListener("keydown", (event) => {
+        if (!state.active || event.repeat) return;
+
+        const target = event.target;
+        if (target && ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName) && !target.classList.contains("answer")) {
+          return;
+        }
+
+        const action = getKeyboardAction(event);
+        if (!action) return;
+        event.preventDefault();
+        handleTeamInput(action.side, action.value);
+      });
+    }
+
+    function getKeyboardAction(event) {
+      if (/^Digit[0-9]$/.test(event.code)) {
+        return { side: event.shiftKey || event.altKey ? "right" : state.keyboardSide, value: event.code.replace("Digit", "") };
+      }
+
+      if (/^Numpad[0-9]$/.test(event.code)) {
+        return { side: "right", value: event.code.replace("Numpad", "") };
+      }
+
+      if (event.code === "Backspace") return { side: state.keyboardSide, value: "clear" };
+      if (event.code === "Delete") return { side: "right", value: "clear" };
+      if (event.code === "Enter") return { side: event.shiftKey || event.altKey ? "right" : state.keyboardSide, value: "submit" };
+      if (event.code === "NumpadEnter") return { side: "right", value: "submit" };
+      return null;
+    }
+
+    function handleTeamInput(side, value) {
+      if (!state.active || state.locks[side]) return;
+      if (value === "clear") clearInput(side);
+      else if (value === "submit") checkAnswer(side);
+      else pressKey(side, value);
     }
 
     function updateSetupView() {
@@ -1532,35 +1705,81 @@
         state.audio.timer = null;
       }
 
-      const bass = [98, 98, 147, 98, 196, 147, 220, 196];
-      const lead = [392, 466, 523, 587, 523, 466, 392, 349];
+      const horn = [392, 523, 587, 659, 587, 523, 784, 659];
       state.audio.timer = setInterval(() => {
         const ctx = state.audio.context;
         const now = ctx.currentTime;
         const step = state.audio.step;
         const energy = Math.max(0, GAME_CONFIG.music.startIntervalMs - state.audio.intervalMs);
-        const leadVolume = Math.min(0.1, 0.058 + energy / 2600);
+        const drumBoost = Math.min(0.08, energy / 2200);
         const beat = step % 16;
 
-        if (beat % 2 === 0) playToneAt(bass[(step / 2) % bass.length | 0], 0.12, "sawtooth", 0.095);
-        if (beat === 4 || beat === 12) playNoiseAt(0.09, 0.065);
-        if (beat % 2 === 1) playNoiseAt(0.025, 0.018);
-        if ([0, 3, 6, 10, 13].includes(beat)) playToneAt(lead[step % lead.length], 0.085, "square", leadVolume);
-        if (state.audio.intervalMs < 135 && (beat === 7 || beat === 15)) playToneAt(784, 0.045, "triangle", 0.045);
+        if ([0, 4, 8, 12].includes(beat)) playKickAt(0.18 + drumBoost);
+        if ([2, 6, 10, 14].includes(beat)) playTaikoAt(154, 0.12 + drumBoost);
+        if ([3, 7, 11, 15].includes(beat)) playTaikoAt(218, 0.075 + drumBoost);
+        if ([1, 5, 9, 13].includes(beat)) playStickAt(0.034);
+        if ([0, 6, 10].includes(beat)) playHornAt(horn[(step + Math.floor(step / 4)) % horn.length], 0.055);
+        if (state.audio.intervalMs < 132 && [5, 15].includes(beat)) playShoutAt(0.052);
         state.audio.step += 1;
 
-        function playToneAt(frequency, duration, type, volume) {
+        function playKickAt(volume) {
           const osc = ctx.createOscillator();
           const gain = ctx.createGain();
-          osc.type = type;
-          osc.frequency.value = frequency;
+          osc.type = "sine";
+          osc.frequency.setValueAtTime(108, now);
+          osc.frequency.exponentialRampToValueAtTime(48, now + 0.16);
           gain.gain.setValueAtTime(0.0001, now);
-          gain.gain.exponentialRampToValueAtTime(volume, now + 0.012);
-          gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+          gain.gain.exponentialRampToValueAtTime(volume, now + 0.008);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
           osc.connect(gain);
           gain.connect(state.audio.gain);
           osc.start(now);
-          osc.stop(now + duration + 0.02);
+          osc.stop(now + 0.2);
+        }
+
+        function playTaikoAt(frequency, volume) {
+          const osc = ctx.createOscillator();
+          const overtone = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = "sine";
+          overtone.type = "triangle";
+          osc.frequency.setValueAtTime(frequency, now);
+          osc.frequency.exponentialRampToValueAtTime(frequency * 0.68, now + 0.12);
+          overtone.frequency.setValueAtTime(frequency * 1.72, now);
+          gain.gain.setValueAtTime(0.0001, now);
+          gain.gain.exponentialRampToValueAtTime(volume, now + 0.006);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.14);
+          osc.connect(gain);
+          overtone.connect(gain);
+          gain.connect(state.audio.gain);
+          osc.start(now);
+          overtone.start(now);
+          osc.stop(now + 0.16);
+          overtone.stop(now + 0.12);
+          playNoiseAt(0.055, volume * 0.22);
+        }
+
+        function playHornAt(frequency, volume) {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = "sawtooth";
+          osc.frequency.value = frequency;
+          gain.gain.setValueAtTime(0.0001, now);
+          gain.gain.exponentialRampToValueAtTime(volume, now + 0.012);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.075);
+          osc.connect(gain);
+          gain.connect(state.audio.gain);
+          osc.start(now);
+          osc.stop(now + 0.095);
+        }
+
+        function playStickAt(volume) {
+          playNoiseAt(0.024, volume);
+        }
+
+        function playShoutAt(volume) {
+          playNoiseAt(0.07, volume);
+          playHornAt(880, volume * 0.7);
         }
 
         function playNoiseAt(duration, volume) {
