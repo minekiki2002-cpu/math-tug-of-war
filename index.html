@@ -168,6 +168,12 @@
       font-size: clamp(18px, 1.4vw, 26px);
     }
 
+    body.app-fullscreen .setup,
+    body.app-fullscreen .countdown,
+    body.app-fullscreen .winner {
+      z-index: 10020;
+    }
+
     .topbar {
       display: flex;
       align-items: center;
@@ -1705,81 +1711,31 @@
         state.audio.timer = null;
       }
 
-      const horn = [392, 523, 587, 659, 587, 523, 784, 659];
+      const melody = [262, 330, 392, 523, 392, 440, 494, 392];
       state.audio.timer = setInterval(() => {
         const ctx = state.audio.context;
         const now = ctx.currentTime;
         const step = state.audio.step;
         const energy = Math.max(0, GAME_CONFIG.music.startIntervalMs - state.audio.intervalMs);
-        const drumBoost = Math.min(0.08, energy / 2200);
-        const beat = step % 16;
-
-        if ([0, 4, 8, 12].includes(beat)) playKickAt(0.18 + drumBoost);
-        if ([2, 6, 10, 14].includes(beat)) playTaikoAt(154, 0.12 + drumBoost);
-        if ([3, 7, 11, 15].includes(beat)) playTaikoAt(218, 0.075 + drumBoost);
-        if ([1, 5, 9, 13].includes(beat)) playStickAt(0.034);
-        if ([0, 6, 10].includes(beat)) playHornAt(horn[(step + Math.floor(step / 4)) % horn.length], 0.055);
-        if (state.audio.intervalMs < 132 && [5, 15].includes(beat)) playShoutAt(0.052);
+        const leadVolume = Math.min(0.12, 0.074 + energy / 2000);
+        playToneAt(melody[step % melody.length], 0.1, "square", leadVolume);
+        if (step % 2 === 0) playToneAt(98, 0.12, "triangle", 0.11);
+        if (step % 4 === 2) playNoiseAt(0.07, 0.028);
+        if (state.audio.intervalMs < 140 && step % 8 === 6) playToneAt(784, 0.07, "square", 0.052);
         state.audio.step += 1;
 
-        function playKickAt(volume) {
+        function playToneAt(frequency, duration, type, volume) {
           const osc = ctx.createOscillator();
           const gain = ctx.createGain();
-          osc.type = "sine";
-          osc.frequency.setValueAtTime(108, now);
-          osc.frequency.exponentialRampToValueAtTime(48, now + 0.16);
-          gain.gain.setValueAtTime(0.0001, now);
-          gain.gain.exponentialRampToValueAtTime(volume, now + 0.008);
-          gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
-          osc.connect(gain);
-          gain.connect(state.audio.gain);
-          osc.start(now);
-          osc.stop(now + 0.2);
-        }
-
-        function playTaikoAt(frequency, volume) {
-          const osc = ctx.createOscillator();
-          const overtone = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.type = "sine";
-          overtone.type = "triangle";
-          osc.frequency.setValueAtTime(frequency, now);
-          osc.frequency.exponentialRampToValueAtTime(frequency * 0.68, now + 0.12);
-          overtone.frequency.setValueAtTime(frequency * 1.72, now);
-          gain.gain.setValueAtTime(0.0001, now);
-          gain.gain.exponentialRampToValueAtTime(volume, now + 0.006);
-          gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.14);
-          osc.connect(gain);
-          overtone.connect(gain);
-          gain.connect(state.audio.gain);
-          osc.start(now);
-          overtone.start(now);
-          osc.stop(now + 0.16);
-          overtone.stop(now + 0.12);
-          playNoiseAt(0.055, volume * 0.22);
-        }
-
-        function playHornAt(frequency, volume) {
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.type = "sawtooth";
+          osc.type = type;
           osc.frequency.value = frequency;
           gain.gain.setValueAtTime(0.0001, now);
           gain.gain.exponentialRampToValueAtTime(volume, now + 0.012);
-          gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.075);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
           osc.connect(gain);
           gain.connect(state.audio.gain);
           osc.start(now);
-          osc.stop(now + 0.095);
-        }
-
-        function playStickAt(volume) {
-          playNoiseAt(0.024, volume);
-        }
-
-        function playShoutAt(volume) {
-          playNoiseAt(0.07, volume);
-          playHornAt(880, volume * 0.7);
+          osc.stop(now + duration + 0.02);
         }
 
         function playNoiseAt(duration, volume) {
@@ -1882,13 +1838,16 @@
       let count = GAME_CONFIG.countdownStart;
       els.countdown.style.display = "grid";
       els.countdown.textContent = count;
+      playCountdownTick(count);
       state.countdownId = setInterval(() => {
         count -= 1;
         if (count > 0) {
           els.countdown.textContent = count;
+          playCountdownTick(count);
           return;
         }
         els.countdown.textContent = "GO!";
+        playCountdownTick(0);
         clearInterval(state.countdownId);
         state.countdownId = null;
         setTimeout(() => {
@@ -1903,6 +1862,26 @@
           generateProblem("right");
         }, 700);
       }, 1000);
+    }
+
+    function playCountdownTick(count) {
+      if (!state.musicEnabled) return;
+      prepareAudioContext();
+      if (!state.audio.context || !state.audio.gain) return;
+
+      const ctx = state.audio.context;
+      const start = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = count === 0 ? "triangle" : "sine";
+      osc.frequency.value = count === 0 ? 784 : 440 + count * 70;
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(count === 0 ? 0.18 : 0.13, start + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + (count === 0 ? 0.42 : 0.22));
+      osc.connect(gain);
+      gain.connect(state.audio.gain);
+      osc.start(start);
+      osc.stop(start + (count === 0 ? 0.46 : 0.26));
     }
 
     function startTimer() {
